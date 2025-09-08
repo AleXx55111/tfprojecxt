@@ -1,0 +1,81 @@
+trigger:
+- main
+
+variables:
+  tfVersion: '1.7.5'
+  workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+parameters:
+- name: serviceConnection
+  displayName: 'Azure Service Connection'
+  type: string
+  default: 'Azure subscription 1(d59a6260-2682-4085-a1dc-fb328c50acae)'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: Plan
+  displayName: 'Terraform Plan'
+  jobs:
+  - job: plan
+    displayName: 'Init/Validate/Plan'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Install Terraform $(tfVersion)'
+      inputs:
+        azureSubscription: ${{ parameters.serviceConnection }}
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          curl -fsSL https://releases.hashicorp.com/terraform/${{ variables.tfVersion }}/terraform_${{ variables.tfVersion }}_linux_amd64.zip -o tf.zip
+          sudo unzip -o tf.zip -d /usr/local/bin
+          terraform -version
+
+    - task: AzureCLI@2
+      displayName: 'terraform init / fmt / validate / plan'
+      inputs:
+        azureSubscription: ${{ parameters.serviceConnection }}
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          cd "$(workingDirectory)"
+          echo "Using backend.hcl:"
+          cat backend.hcl
+
+          # Export ARM creds for any azurerm auth the provider may use (OIDC/MSI via service connection)
+          # Not strictly required because we pass subscription/tenant via variables, but safe to include.
+          export ARM_TENANT_ID="9f7a36a6-53a9-4c4b-924d-7fcd85b5f921"
+          export ARM_SUBSCRIPTION_ID="d59a6260-2682-4085-a1dc-fb328c50acae"
+
+          terraform init -backend-config=backend.hcl
+          terraform fmt -recursive
+          terraform validate
+          terraform plan -out=tfplan
+
+    - publish: $(System.DefaultWorkingDirectory)/tfplan
+      artifact: tfplan
+
+- stage: Apply
+  displayName: 'Terraform Apply'
+  dependsOn: Plan
+  condition: succeeded()
+  jobs:
+  - job: apply
+    displayName: 'Apply'
+    steps:
+    - download: current
+      artifact: tfplan
+
+    - task: AzureCLI@2
+      displayName: 'terraform apply'
+      inputs:
+        azureSubscription: ${{ parameters.serviceConnection }}
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          cd "$(System.DefaultWorkingDirectory)"
+          terraform apply -auto-approve tfplan
