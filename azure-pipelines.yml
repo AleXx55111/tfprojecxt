@@ -9,7 +9,7 @@ parameters:
 - name: serviceConnection
   displayName: 'Azure Service Connection'
   type: string
-  default: 'Azure subscription 1(d59a6260-2682-4085-a1dc-fb328c50acae)'
+  default: 'Azure subscription 1(  xxxxxxxxxxxxxxxxxxxx)'
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -48,7 +48,7 @@ stages:
           # Export ARM creds for any azurerm auth the provider may use (OIDC/MSI via service connection)
           # Not strictly required because we pass subscription/tenant via variables, but safe to include.
           export ARM_TENANT_ID="9f7a36a6-53a9-4c4b-924d-7fcd85b5f921"
-          export ARM_SUBSCRIPTION_ID="d59a6260-2682-4085-a1dc-fb328c50acae"
+          export ARM_SUBSCRIPTION_ID="dxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
           terraform init -backend-config=backend.hcl
           terraform fmt -recursive
